@@ -36,11 +36,16 @@
     </table>
 
     <script>
-        const apiBase = 'https://ton-backend.com/api'; // <- change avec ton endpoint
+        // Endpoint WordPress REST API
+        const apiBase = '<?php echo esc_url(rest_url("gps/v1/analytics")); ?>';
 
         async function fetchAnalytics() {
             try {
-                const res = await fetch(`${apiBase}/analytics`);
+                const res = await fetch(apiBase, {
+                    headers: {
+                        'X-WP-Nonce': '<?php echo wp_create_nonce("wp_rest"); ?>'
+                    }
+                });
                 const data = await res.json();
                 const tbody = document.querySelector("#analyticsTable tbody");
                 tbody.innerHTML = '';
