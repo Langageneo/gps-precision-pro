@@ -1,90 +1,81 @@
+<!-- wordpress_plugin/admin-ui.html -->
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>GPS Analytics Dashboard</title>
+    <title>Dashboard Admin GPS</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 20px;
-        }
-
-        h2 {
-            margin-bottom: 10px;
-        }
-
-        .box {
-            background: #fff;
-            border: 1px solid #ddd;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 6px;
-            font-weight: bold;
-        }
-
-        input[type="text"] {
-            width: 300px;
-            padding: 6px;
-            border: 1px solid #ccc;
-        }
-
-        button {
-            margin-top: 10px;
-            padding: 8px 14px;
-            border: none;
-            background: #0073aa;
-            color: #fff;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: #005f8d;
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background-color: #f5f5f5; }
+        button { padding: 6px 12px; margin: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
+    <h1>Dashboard Admin GPS</h1>
 
-    <h2>GPS Precision – Admin Panel</h2>
-
-    <div class="box">
-        <h3>Configuration Backend</h3>
-        <label>URL du Backend FastAPI</label>
-        <input id="backend_url" type="text" placeholder="https://example.com/api">
-
-        <button onclick="saveConfig()">Enregistrer</button>
+    <div>
+        <button onclick="fetchAnalytics()">Charger Analytics</button>
+        <button onclick="exportCSV()">Exporter CSV</button>
     </div>
 
-    <div class="box">
-        <h3>Analytics Global</h3>
-        <button onclick="loadAnalytics()">Charger Analytics</button>
-
-        <pre id="analytics_output" style="margin-top:15px; background:#f5f5f5; padding:10px;"></pre>
-    </div>
+    <table id="analyticsTable">
+        <thead>
+            <tr>
+                <th>ID Livreur</th>
+                <th>Distance Parcourue (km)</th>
+                <th>Zones Problématiques</th>
+                <th>Dernière Correction GPS</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Rempli dynamiquement -->
+        </tbody>
+    </table>
 
     <script>
-        function saveConfig() {
-            const url = document.getElementById('backend_url').value;
-            localStorage.setItem('gps_backend_url', url);
-            alert("Configuration enregistrée.");
+        const apiBase = 'https://ton-backend.com/api'; // <- change avec ton endpoint
+
+        async function fetchAnalytics() {
+            try {
+                const res = await fetch(`${apiBase}/analytics`);
+                const data = await res.json();
+                const tbody = document.querySelector("#analyticsTable tbody");
+                tbody.innerHTML = '';
+                data.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.livreur_id}</td>
+                        <td>${item.distance}</td>
+                        <td>${item.zones_rouges.join(', ')}</td>
+                        <td>${item.last_gps_correction}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (err) {
+                console.error(err);
+                alert('Erreur lors du chargement des analytics');
+            }
         }
 
-        async function loadAnalytics() {
-            const api = localStorage.getItem('gps_backend_url');
-            if (!api) {
-                alert("Backend non configuré.");
-                return;
+        function exportCSV() {
+            const table = document.getElementById('analyticsTable');
+            let csv = [];
+            for (let row of table.rows) {
+                let rowData = [];
+                for (let cell of row.cells) rowData.push(cell.innerText);
+                csv.push(rowData.join(','));
             }
-
-            const r = await fetch(api + "/analytics");
-            const data = await r.json();
-            document.getElementById("analytics_output").textContent = JSON.stringify(data, null, 2);
+            const csvString = csv.join('\n');
+            const blob = new Blob([csvString], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'analytics.csv';
+            a.click();
         }
     </script>
-
 </body>
 </html>
