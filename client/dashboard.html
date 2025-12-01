@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Dashboard — Heatmap</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style> #map{height:80vh; width:100%;} body{font-family:Arial,Helvetica,sans-serif;} </style>
+</head>
+<body>
+  <h3>Heatmap</h3>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    const API = "http://localhost:8000";
+    const map = L.map('map').setView([6.5, -5.5], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
+    async function loadHeat(){
+      const res = await fetch(API + "/analytics");
+      const j = await res.json();
+      j.heatmap.forEach(p=>{
+        L.circleMarker([p.lat, p.lon], {radius:3, opacity:0.6}).addTo(map);
+      });
+    }
+    loadHeat();
+  </script>
+</body>
+</html>
