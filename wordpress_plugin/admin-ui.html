@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>GPS Analytics Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+
+        h2 {
+            margin-bottom: 10px;
+        }
+
+        .box {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: bold;
+        }
+
+        input[type="text"] {
+            width: 300px;
+            padding: 6px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            margin-top: 10px;
+            padding: 8px 14px;
+            border: none;
+            background: #0073aa;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #005f8d;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>GPS Precision – Admin Panel</h2>
+
+    <div class="box">
+        <h3>Configuration Backend</h3>
+        <label>URL du Backend FastAPI</label>
+        <input id="backend_url" type="text" placeholder="https://example.com/api">
+
+        <button onclick="saveConfig()">Enregistrer</button>
+    </div>
+
+    <div class="box">
+        <h3>Analytics Global</h3>
+        <button onclick="loadAnalytics()">Charger Analytics</button>
+
+        <pre id="analytics_output" style="margin-top:15px; background:#f5f5f5; padding:10px;"></pre>
+    </div>
+
+    <script>
+        function saveConfig() {
+            const url = document.getElementById('backend_url').value;
+            localStorage.setItem('gps_backend_url', url);
+            alert("Configuration enregistrée.");
+        }
+
+        async function loadAnalytics() {
+            const api = localStorage.getItem('gps_backend_url');
+            if (!api) {
+                alert("Backend non configuré.");
+                return;
+            }
+
+            const r = await fetch(api + "/analytics");
+            const data = await r.json();
+            document.getElementById("analytics_output").textContent = JSON.stringify(data, null, 2);
+        }
+    </script>
+
+</body>
+</html>
