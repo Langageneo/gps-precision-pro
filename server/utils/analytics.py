@@ -1,45 +1,93 @@
-# server/utils/analytics.py
-from server.db import get_conn
-from server.utils.gps import haversine_distance
-import time
-import json
+import sqlite3
+from datetime import datetime
+from collections import Counter
 
-def stats_overall(since_ts=0):
-    conn = get_conn()
-    cur = conn.cursor()
-    q = "SELECT COUNT(*) as cnt, AVG(accuracy) as avg_acc FROM gps_points WHERE timestamp>=?"
-    cur.execute(q, (since_ts,))
-    row = cur.fetchone()
-    return {"count": row["cnt"], "avg_accuracy": row["avg_acc"]}
+DB_PATH = 'db/analytics.sqlite'
 
-def heatmap_points(limit=10000):
-    conn = get_conn()
+# Connexion SQLite
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+# 1️⃣ Tous les analytics globaux
+def get_all_stats():
+    conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT lat, lon FROM gps_points ORDER BY timestamp DESC LIMIT ?", (limit,))
-    rows = cur.fetchall()
-    points = [{"lat": r["lat"], "lon": r["lon"]} for r in rows]
+    cur.execute("SELECT * FROM analytics")
+    rows = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return rows
+
+# 2️⃣ Analytics détaillés pour chaque livreur
+def get_livreurs_stats():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT livreur_id, COUNT(*) AS livraisons, 
+               SUM(distance) AS distance_totale, 
+               AVG(score) AS score_moyen
+        FROM analytics
+        GROUP BY livreur_id
+    """)
+    rows = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return rows
+
+# 3️⃣ Meilleur livreur
+def get_best_livreur():
+    livreurs = get_livreurs_stats()
+    if not livreurs:
+        return {}
+    # Score pondéré : 50% distance, 50% score_moyen
+    for l in livreurs:
+        l['score_pondere'] = l['distance_totale']*0.5 + l['score_moyen']*0.5
+    best = max(livreurs, key=lambda x: x['score_pondere'])
+    return best
+
+# 4️⃣ Produits les plus populaires
+def get_popular_products(top_n=10):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT product_name FROM analytics")
+    products = [row['product_name'] for row in cur.fetchall()]
+    conn.close()
+    counter = Counter(products)
+    return counter.most_common(top_n)
+
+# 5️⃣ Heatmap zones
+def get_heatmap_zones():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT latitude, longitude FROM analytics")
+    points = [dict(row) for row in cur.fetchall()]
+    conn.close()
     return points
 
-def distance_by_device(device_id):
-    conn = get_conn()
+# 6️⃣ Alertes dynamiques (zones congestion, pics)
+def get_alerts():
+    conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM gps_points WHERE device_id=? ORDER BY timestamp ASC", (device_id,))
-    rows = cur.fetchall()
-    total = 0.0
-    prev = None
-    for r in rows:
-        if prev:
-            total += haversine_distance(prev["lat"], prev["lon"], r["lat"], r["lon"])
-        prev = r
-    return {"device_id": device_id, "distance_m": total}
+    # Exemple simple : zones avec >50 livraisons en 1h
+    cur.execute("""
+        SELECT zone, COUNT(*) AS nb_livraisons
+        FROM analytics
+        WHERE timestamp >= datetime('now','-1 hour')
+        GROUP BY zone
+        HAVING nb_livraisons > 50
+    """)
+    alerts = [dict(row) for row in cur.fetchall()]
+    conn.close()
+    return alerts
 
-def problematic_zones(threshold=500):
-    """
-    simple heuristic: find clusters of points where accuracy worse than threshold
-    """
-    conn = get_conn()
+# 7️⃣ Prédictions simples
+def predictive_suggestions():
+    # Basé sur historique : zones avec + de livraisons récurrentes
+    conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT lat, lon, accuracy FROM gps_points WHERE accuracy>? ORDER BY timestamp DESC LIMIT 5000", (threshold,))
-    rows = cur.fetchall()
-    zones = [{"lat": r["lat"], "lon": r["lon"], "accuracy": r["accuracy"]} for r in rows]
-    return zones
+    cur.execute("SELECT zone FROM analytics")
+    zones = [row['zone'] for row in cur.fetchall()]
+    conn.close()
+    counter = Counter(zones)
+    top_zones = counter.most_common(5)
+    return {"zones_a_surveiller": top_zones}
