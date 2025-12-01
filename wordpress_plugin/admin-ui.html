@@ -1,4 +1,3 @@
-<!-- wordpress_plugin/admin-ui.html -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -36,15 +35,14 @@
     </table>
 
     <script>
-        // Endpoint WordPress REST API
+        // Endpoint REST API WordPress
         const apiBase = '<?php echo esc_url(rest_url("gps/v1/analytics")); ?>';
+        const nonce = '<?php echo wp_create_nonce("wp_rest"); ?>';
 
         async function fetchAnalytics() {
             try {
                 const res = await fetch(apiBase, {
-                    headers: {
-                        'X-WP-Nonce': '<?php echo wp_create_nonce("wp_rest"); ?>'
-                    }
+                    headers: { 'X-WP-Nonce': nonce }
                 });
                 const data = await res.json();
                 const tbody = document.querySelector("#analyticsTable tbody");
