@@ -2,23 +2,45 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
+    android:orientation="horizontal"
     android:padding="8dp">
 
-    <!-- Livreur / Produit / Alert / Prediction -->
     <TextView
-        android:id="@+id/tvColumn1"
-        android:layout_width="match_parent"
+        android:id="@+id/livreurText"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Info"
-        android:textSize="16sp"
+        android:layout_weight="2"
+        android:text="Livreur"
+        android:textSize="14sp"
         android:textColor="#000000" />
 
     <TextView
-        android:id="@+id/tvColumn2"
-        android:layout_width="match_parent"
+        android:id="@+id/produitText"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Détails"
+        android:layout_weight="2"
+        android:text="Produit"
         android:textSize="14sp"
-        android:textColor="#444444" />
+        android:textColor="#000000" />
+
+    <TextView
+        android:id="@+id/distanceText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="Distance"
+        android:textSize="14sp"
+        android:textColor="#000000"
+        android:gravity="center" />
+
+    <TextView
+        android:id="@+id/evaluationText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="⭐"
+        android:textSize="14sp"
+        android:textColor="#000000"
+        android:gravity="center" />
+
 </LinearLayout>
