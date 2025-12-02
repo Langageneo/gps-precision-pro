@@ -1,18 +1,29 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import sqlite3
 import requests
 import datetime
-import math
-import uvicorn
 import os
+import time
+import math
+import jwt
+import numpy as np
+from sklearn.linear_model import LinearRegression
+import uvicorn
+from collections import defaultdict
 
 # ======== CONFIG ========
 DB_PATH = os.path.join("db", "analytics.sqlite")
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 OSRM_URL = "http://router.project-osrm.org/route/v1/driving"
+
+JWT_SECRET = "TonSecretSuperFort"
+JWT_ALGORITHM = "HS256"
+RATE_LIMIT = 10
+TIME_WINDOW = 60  # secondes
+requests_history = defaultdict(list)
 
 # ======== APP ========
 app = FastAPI(title="GPS Dashboard API")
@@ -39,6 +50,7 @@ class RouteRequest(BaseModel):
 
 # ======== DATABASE UTILS ========
 def init_db():
+    os.makedirs("db", exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
@@ -58,10 +70,35 @@ def init_db():
 def save_gps(lat, lon, corr_lat, corr_lon, address):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("INSERT INTO gps_history (latitude, longitude, corrected_lat, corrected_lon, address, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-              (lat, lon, corr_lat, corr_lon, address, datetime.datetime.utcnow().isoformat()))
+    c.execute(
+        "INSERT INTO gps_history (latitude, longitude, corrected_lat, corrected_lon, address, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+        (lat, lon, corr_lat, corr_lon, address, datetime.datetime.utcnow().isoformat())
+    )
     conn.commit()
     conn.close()
+
+# ======== RATE LIMITING ========
+def check_rate_limit(ip: str):
+    now = time.time()
+    requests_history[ip] = [t for t in requests_history[ip] if now - t < TIME_WINDOW]
+    if len(requests_history[ip]) >= RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Trop de requêtes")
+    requests_history[ip].append(now)
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    ip = request.client.host
+    check_rate_limit(ip)
+    response = await call_next(request)
+    return response
+
+# ======== JWT UTIL ========
+def verify_token(token: str):
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return payload
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token invalide")
 
 # ======== UTILITIES ========
 def geocode_address(address):
@@ -81,7 +118,6 @@ def correct_gps(lat, lon, address=None):
     if address:
         try:
             geo_lat, geo_lon = geocode_address(address)
-            # pondération simple : device 70%, geocode 30%
             corr_lat = 0.7 * lat + 0.3 * geo_lat
             corr_lon = 0.7 * lon + 0.3 * geo_lon
         except:
@@ -98,6 +134,32 @@ def calculate_route(waypoints):
         raise HTTPException(status_code=400, detail="Error fetching route")
     data = r.json()
     return data.get("routes", [])
+
+# ======== MACHINE LEARNING ========
+def predictive_correction():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT latitude, longitude, corrected_lat, corrected_lon FROM gps_history")
+    rows = c.fetchall()
+    conn.close()
+
+    if len(rows) < 5:
+        return []
+
+    X = np.array([[lat, lon] for lat, lon, _, _ in rows])
+    y_lat = np.array([corr_lat for _, _, corr_lat, _ in rows])
+    y_lon = np.array([corr_lon for _, _, _, corr_lon in rows])
+
+    model_lat = LinearRegression().fit(X, y_lat)
+    model_lon = LinearRegression().fit(X, y_lon)
+
+    predictions = []
+    for lat, lon, _, _ in rows:
+        pred_lat = model_lat.predict([[lat, lon]])[0]
+        pred_lon = model_lon.predict([[lat, lon]])[0]
+        predictions.append({"pred_lat": pred_lat, "pred_lon": pred_lon})
+
+    return predictions
 
 # ======== ROUTES ========
 @app.get("/")
@@ -122,7 +184,6 @@ def get_optimized_route(req: RouteRequest):
 
 @app.get("/analytics")
 def analytics():
-    """Return simple analytics: total points, heatmap points, last corrections"""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT COUNT(*), MAX(timestamp) FROM gps_history")
@@ -131,6 +192,16 @@ def analytics():
     points = [{"lat": lat, "lon": lon} for lat, lon in c.fetchall()]
     conn.close()
     return {"total_points": count, "last_correction": last_ts, "points": points}
+
+@app.get("/predictive")
+def predictive():
+    return predictive_correction()
+
+@app.get("/secure-analytics")
+def secure_analytics(authorization: str = Header(...)):
+    token = authorization.replace("Bearer ", "")
+    verify_token(token)
+    return analytics()
 
 # ======== INIT DB ========
 init_db()
